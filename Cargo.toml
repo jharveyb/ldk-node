@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 edition = "2021"
 rust-version = "1.85"
 description = "A ready-to-go node implementation built using LDK."
-repository = "https://github.com/lightningdevkit/ldk-node/"
+repository = "https://github.com/jharveyb/ldk-node/"
 readme = "README.md"
 keywords = ["bitcoin", "lightning", "ldk", "bdk"]
 categories = ["cryptography::cryptocurrencies"]
@@ -116,29 +116,29 @@ name = "payments"
 harness = false
 
 [patch.crates-io]
-lightning = { path = "../rust-lightning/lightning", features = ["std", "_test_utils"] }
-lightning-types = { path = "../rust-lightning/lightning-types" }
-lightning-invoice = { path = "../rust-lightning/lightning-invoice" }
-lightning-net-tokio = { path = "../rust-lightning/lightning-net-tokio" }
-lightning-persister = { path = "../rust-lightning/lightning-persister" }
-lightning-background-processor = { path = "../rust-lightning/lightning-background-processor" }
-lightning-rapid-gossip-sync = { path = "../rust-lightning/lightning-rapid-gossip-sync" }
-lightning-block-sync = { path = "../rust-lightning/lightning-block-sync" }
-lightning-transaction-sync = { path = "../rust-lightning/lightning-transaction-sync" }
-lightning-liquidity = { path = "../rust-lightning/lightning-liquidity" }
-lightning-macros = { path = "../rust-lightning/lightning-macros" }
+#lightning = { path = "../rust-lightning/lightning", features = ["std", "_test_utils"] }
+#lightning-types = { path = "../rust-lightning/lightning-types" }
+#lightning-invoice = { path = "../rust-lightning/lightning-invoice" }
+#lightning-net-tokio = { path = "../rust-lightning/lightning-net-tokio" }
+#lightning-persister = { path = "../rust-lightning/lightning-persister" }
+#lightning-background-processor = { path = "../rust-lightning/lightning-background-processor" }
+#lightning-rapid-gossip-sync = { path = "../rust-lightning/lightning-rapid-gossip-sync" }
+#lightning-block-sync = { path = "../rust-lightning/lightning-block-sync" }
+#lightning-transaction-sync = { path = "../rust-lightning/lightning-transaction-sync" }
+#lightning-liquidity = { path = "../rust-lightning/lightning-liquidity" }
+#lightning-macros = { path = "../rust-lightning/lightning-macros" }
 
-#lightning = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-types = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-invoice = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-net-tokio = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-persister = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-background-processor = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-rapid-gossip-sync = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-block-sync = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-transaction-sync = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-liquidity = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-macros = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
+lightning = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-types = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-invoice = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-net-tokio = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-persister = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-background-processor = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-rapid-gossip-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-block-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-transaction-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-liquidity = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning-macros = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
 
 #lightning = { git = "https://github.com/lightningdevkit/rust-lightning", rev = "21e9a9c0ef80021d0669f2a366f55d08ba8d9b03" }
 #lightning-types = { git = "https://github.com/lightningdevkit/rust-lightning", rev = "21e9a9c0ef80021d0669f2a366f55d08ba8d9b03" }
