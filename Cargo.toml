@@ -6,7 +6,7 @@ homepage = "https://lightningdevkit.org/"
 license = "MIT OR Apache-2.0"
 edition = "2021"
 description = "A ready-to-go node implementation built using LDK."
-repository = "https://github.com/lightningdevkit/ldk-node/"
+repository = "https://github.com/jharveyb/ldk-node/"
 readme = "README.md"
 keywords = ["bitcoin", "lightning", "ldk", "bdk"]
 categories = ["cryptography::cryptocurrencies"]
@@ -39,27 +39,27 @@ default = []
 # lightning-transaction-sync = { version = "0.1.0", features = ["esplora-async-https", "time", "electrum"] }
 # lightning-liquidity = { version = "0.1.0", features = ["std"] }
 
-#lightning = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main", features = ["std"] }
-#lightning-types = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-invoice = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main", features = ["std"] }
-#lightning-net-tokio = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-persister = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-background-processor = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main", features = ["futures"] }
-#lightning-rapid-gossip-sync = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
-#lightning-block-sync = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main", features = ["rpc-client", "tokio"] }
-#lightning-transaction-sync = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main", features = ["esplora-async-https", "electrum", "time"] }
-#lightning-liquidity = { git = "https://github.com/lightningdevkit/rust-lightning", branch = "main" }
+lightning = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer", features = ["std"] }
+lightning-types = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer" }
+lightning-invoice = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer", features = ["std"] }
+lightning-net-tokio = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer" }
+lightning-persister = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer" }
+lightning-background-processor = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer", features = ["futures"] }
+lightning-rapid-gossip-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer" }
+lightning-block-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer", features = ["rpc-client", "tokio"] }
+lightning-transaction-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer", features = ["esplora-async-https", "electrum", "time"] }
+lightning-liquidity = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer" }
 
-lightning = { path = "../rust-lightning/lightning", features = ["std"] }
-lightning-types = { path = "../rust-lightning/lightning-types" }
-lightning-invoice = { path = "../rust-lightning/lightning-invoice", features = ["std"] }
-lightning-net-tokio = { path = "../rust-lightning/lightning-net-tokio" }
-lightning-persister = { path = "../rust-lightning/lightning-persister" }
-lightning-background-processor = { path = "../rust-lightning/lightning-background-processor", features = ["futures"] }
-lightning-rapid-gossip-sync = { path = "../rust-lightning/lightning-rapid-gossip-sync" }
-lightning-block-sync = { path = "../rust-lightning/lightning-block-sync", features = ["rpc-client", "tokio"] }
-lightning-transaction-sync = { path = "../rust-lightning/lightning-transaction-sync", features = ["esplora-async-https", "electrum", "time"] }
-lightning-liquidity = { path = "../rust-lightning/lightning-liquidity", features = ["std"] }
+# lightning = { path = "../rust-lightning/lightning", features = ["std"] }
+# lightning-types = { path = "../rust-lightning/lightning-types" }
+# lightning-invoice = { path = "../rust-lightning/lightning-invoice", features = ["std"] }
+# lightning-net-tokio = { path = "../rust-lightning/lightning-net-tokio" }
+# lightning-persister = { path = "../rust-lightning/lightning-persister" }
+# lightning-background-processor = { path = "../rust-lightning/lightning-background-processor", features = ["futures"] }
+# lightning-rapid-gossip-sync = { path = "../rust-lightning/lightning-rapid-gossip-sync" }
+# lightning-block-sync = { path = "../rust-lightning/lightning-block-sync", features = ["rpc-client", "tokio"] }
+# lightning-transaction-sync = { path = "../rust-lightning/lightning-transaction-sync", features = ["esplora-async-https", "electrum", "time"] }
+# lightning-liquidity = { path = "../rust-lightning/lightning-liquidity", features = ["std"] }
 
 bdk_chain = { version = "0.23.0", default-features = false, features = ["std"] }
 bdk_esplora = { version = "0.22.0", default-features = false, features = ["async-https-rustls", "tokio"]}
@@ -97,8 +97,9 @@ winapi = { version = "0.3", features = ["winbase"] }
 
 [dev-dependencies]
 # lightning = { version = "0.1.0", features = ["std", "_test_utils"] }
-#lightning = { git = "https://github.com/lightningdevkit/rust-lightning", branch="main", features = ["std", "_test_utils"] }
-lightning = { path = "../rust-lightning/lightning", features = ["std", "_test_utils"] }
+#lightning = { git = "https://github.com/jharveyb/rust-lightning", branch="main", features = ["std", "_test_utils"] }
+lightning = { git = "https://github.com/jharveyb/rust-lightning", branch="gossip_observer", features = ["std", "_test_utils"] }
+# lightning = { path = "../rust-lightning/lightning", features = ["std", "_test_utils"] }
 proptest = "1.0.0"
 regex = "1.5.6"
 
