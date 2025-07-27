@@ -15,7 +15,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use bitcoin::secp256k1::PublicKey;
-use chrono::Utc;
+use bitcoin::hashes::Hash;
+use chrono::{TimeZone, Utc};
+use lightning::util::ser::Writeable;
 pub use lightning::util::logger::Level as LogLevel;
 pub(crate) use lightning::util::logger::{Logger as LdkLogger, Record as LdkRecord};
 pub(crate) use lightning::{log_bytes, log_debug, log_error, log_info, log_trace};
@@ -224,6 +226,31 @@ impl LdkLogger for Logger {
 	}
 	
 	fn export(&self, their_node_id: PublicKey, msg: lightning::ln::msgs::UnsignedGossipMessage) {
-		todo!()
+		let msg_type = match msg {
+			lightning::ln::msgs::UnsignedGossipMessage::ChannelAnnouncement(_) => "ca",
+			lightning::ln::msgs::UnsignedGossipMessage::ChannelUpdate(_) => "cu",
+			lightning::ln::msgs::UnsignedGossipMessage::NodeAnnouncement(_) => "na",
+		};
+		if let Writer::FileWriter { ref file_path, .. } = self.writer {
+			if let Some(parent_dir) = Path::new(&file_path).parent() {
+			let now = chrono::Utc::now().timestamp_micros();
+			let recv_peer = their_node_id.to_string();
+			let size = msg.serialized_length();
+			let smthn = msg.encode();
+			let msg_hash = bitcoin::hashes::sha256::Hash::hash(&smthn);
+			let export_line = format!("{now},{msg_hash},{recv_peer},{msg_type},{size}\n");
+			let export_path = parent_dir.join("gossip_export.csv");
+
+			// CSV header:
+			// unix_micros,msg_hash,recv_peer,type,size
+			fs::OpenOptions::new()
+				.create(true)
+				.append(true)
+				.open(&export_path)
+				.expect("Failed to open log file")
+				.write_all(export_line.as_bytes())
+				.expect("Failed to write to log file")
+			}
+		}
 	    }
 }
