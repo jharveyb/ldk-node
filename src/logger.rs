@@ -14,6 +14,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
+use bitcoin::secp256k1::PublicKey;
 use chrono::Utc;
 pub use lightning::util::logger::Level as LogLevel;
 pub(crate) use lightning::util::logger::{Logger as LdkLogger, Record as LdkRecord};
@@ -221,4 +222,8 @@ impl LdkLogger for Logger {
 			},
 		}
 	}
+	
+	fn export(&self, their_node_id: PublicKey, msg: lightning::ln::msgs::UnsignedGossipMessage) {
+		todo!()
+	    }
 }
