@@ -7,6 +7,7 @@
 
 //! Logging-related objects.
 
+use bitcoin::secp256k1::PublicKey;
 pub(crate) use lightning::util::logger::{Logger as LdkLogger, Record as LdkRecord};
 pub(crate) use lightning::{log_bytes, log_debug, log_error, log_info, log_trace};
 
@@ -222,4 +223,8 @@ impl LdkLogger for Logger {
 			},
 		}
 	}
+	
+	fn export(&self, their_node_id: PublicKey, msg: lightning::ln::msgs::UnsignedGossipMessage) {
+		todo!()
+	    }
 }
