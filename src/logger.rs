@@ -224,33 +224,49 @@ impl LdkLogger for Logger {
 			},
 		}
 	}
-	
+
 	fn export(&self, their_node_id: PublicKey, msg: lightning::ln::msgs::UnsignedGossipMessage) {
 		let msg_type = match msg {
 			lightning::ln::msgs::UnsignedGossipMessage::ChannelAnnouncement(_) => "ca",
 			lightning::ln::msgs::UnsignedGossipMessage::ChannelUpdate(_) => "cu",
 			lightning::ln::msgs::UnsignedGossipMessage::NodeAnnouncement(_) => "na",
 		};
-		if let Writer::FileWriter { ref file_path, .. } = self.writer {
-			if let Some(parent_dir) = Path::new(&file_path).parent() {
+
+		if let Writer::CustomWriter(exporter) = &self.writer {
 			let now = chrono::Utc::now().timestamp_micros();
 			let recv_peer = their_node_id.to_string();
 			let size = msg.serialized_length();
 			let smthn = msg.encode();
 			let msg_hash = bitcoin::hashes::sha256::Hash::hash(&smthn);
-			let export_line = format!("{now},{msg_hash},{recv_peer},{msg_type},{size}\n");
-			let export_path = parent_dir.join("gossip_export.csv");
+			let record = LogRecord {
+				level: LogLevel::Gossip,
+				module_path: "custom::gossip_collector",
+				line: 0,
+				args: format_args!("{now},{msg_hash},{recv_peer},{msg_type},{size}\n"),
+			};
+			exporter.log(record);
+		}
 
-			// CSV header:
-			// unix_micros,msg_hash,recv_peer,type,size
-			fs::OpenOptions::new()
-				.create(true)
-				.append(true)
-				.open(&export_path)
-				.expect("Failed to open log file")
-				.write_all(export_line.as_bytes())
-				.expect("Failed to write to log file")
+		if let Writer::FileWriter { ref file_path, .. } = self.writer {
+			if let Some(parent_dir) = Path::new(&file_path).parent() {
+				let now = chrono::Utc::now().timestamp_micros();
+				let recv_peer = their_node_id.to_string();
+				let size = msg.serialized_length();
+				let smthn = msg.encode();
+				let msg_hash = bitcoin::hashes::sha256::Hash::hash(&smthn);
+				let export_line = format!("{now},{msg_hash},{recv_peer},{msg_type},{size}\n");
+				let export_path = parent_dir.join("gossip_export.csv");
+
+				// CSV header:
+				// unix_micros,msg_hash,recv_peer,type,size
+				fs::OpenOptions::new()
+					.create(true)
+					.append(true)
+					.open(&export_path)
+					.expect("Failed to open log file")
+					.write_all(export_line.as_bytes())
+					.expect("Failed to write to log file")
 			}
 		}
-	    }
+	}
 }
