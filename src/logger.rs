@@ -14,6 +14,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
+use base64::Engine;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::hashes::Hash;
 use chrono::{TimeZone, Utc};
@@ -226,35 +227,38 @@ impl LdkLogger for Logger {
 	}
 
 	fn export(&self, their_node_id: PublicKey, msg: lightning::ln::msgs::UnsignedGossipMessage) {
-		let msg_type = match msg {
-			lightning::ln::msgs::UnsignedGossipMessage::ChannelAnnouncement(_) => "ca",
-			lightning::ln::msgs::UnsignedGossipMessage::ChannelUpdate(_) => "cu",
-			lightning::ln::msgs::UnsignedGossipMessage::NodeAnnouncement(_) => "na",
+		if let Writer::LogFacadeWriter = self.writer { return }
+
+		// Record the original message size, but only store the unsigned inner message.
+		let (msg_type, sig_size) = match msg {
+			lightning::ln::msgs::UnsignedGossipMessage::ChannelAnnouncement(_) => ("ca", 256),
+			lightning::ln::msgs::UnsignedGossipMessage::ChannelUpdate(_) => ("cu", 64),
+			lightning::ln::msgs::UnsignedGossipMessage::NodeAnnouncement(_) => ("na", 64),
 		};
+		// TODO: Should we make a short ID for messages?
+		let msg = msg.encode();
+		let msg_size = msg.len() + sig_size;
+		let now = chrono::Utc::now().timestamp_micros();
+		let recv_peer = their_node_id.to_string();
+		let msg = base64::engine::general_purpose::URL_SAFE.encode(&msg);
 
 		if let Writer::CustomWriter(exporter) = &self.writer {
-			let now = chrono::Utc::now().timestamp_micros();
-			let recv_peer = their_node_id.to_string();
-			let size = msg.serialized_length();
-			let smthn = msg.encode();
-			let msg_hash = bitcoin::hashes::sha256::Hash::hash(&smthn);
+			// This is how we'll decode later.
+			// let smthn_d = lightning::ln::msgs::UnsignedChannelAnnouncement::read(&mut Cursor::new(smthn)).unwrap();
+
 			let record = LogRecord {
 				level: LogLevel::Gossip,
 				module_path: "custom::gossip_collector",
 				line: 0,
-				args: format_args!("{now},{msg_hash},{recv_peer},{msg_type},{size}\n"),
+				args: format_args!("{now},{recv_peer},{msg_type},{msg_size},{msg}"),
 			};
 			exporter.log(record);
 		}
 
+		// TODO: deprecate
 		if let Writer::FileWriter { ref file_path, .. } = self.writer {
 			if let Some(parent_dir) = Path::new(&file_path).parent() {
-				let now = chrono::Utc::now().timestamp_micros();
-				let recv_peer = their_node_id.to_string();
-				let size = msg.serialized_length();
-				let smthn = msg.encode();
-				let msg_hash = bitcoin::hashes::sha256::Hash::hash(&smthn);
-				let export_line = format!("{now},{msg_hash},{recv_peer},{msg_type},{size}\n");
+				let export_line = format!("{now},{recv_peer},{msg_type},{msg_size},{msg}\n");
 				let export_path = parent_dir.join("gossip_export.csv");
 
 				// CSV header:
