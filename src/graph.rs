@@ -50,6 +50,11 @@ impl NetworkGraph {
 	pub fn node(&self, node_id: &NodeId) -> Option<NodeInfo> {
 		self.inner.read_only().nodes().get(node_id).cloned().map(|n| n.into())
 	}
+
+	/// Remove channels with no update from the last 2 weeks.
+	pub fn prune(&self) {
+		self.inner.remove_stale_channels_and_tracking();
+	}
 }
 
 /// Details about a channel (both directions).
