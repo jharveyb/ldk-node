@@ -235,22 +235,41 @@ impl LdkLogger for Logger {
 			lightning::ln::msgs::UnsignedGossipMessage::ChannelUpdate(_) => ("cu", 64),
 			lightning::ln::msgs::UnsignedGossipMessage::NodeAnnouncement(_) => ("na", 64),
 		};
+
+		// Extract interesting fields from the message.
+		// BOLT-7 suggests our timestamps are UNIX time in seconds; we'll switch
+		// units to microseconds to match our own timestamping precision.
+		let (send_ts, node_id, scid) = match msg {
+		    lightning::ln::msgs::UnsignedGossipMessage::NodeAnnouncement(na) => {
+			(Some((na.timestamp as u64) * 1000000), Some(na.node_id), None)
+		    }
+		    lightning::ln::msgs::UnsignedGossipMessage::ChannelAnnouncement(ca) => {
+			(None, None, Some(ca.short_channel_id))
+		    },
+		    lightning::ln::msgs::UnsignedGossipMessage::ChannelUpdate(cu) => {
+			(Some((cu.timestamp as u64) * 1000000), None, Some(cu.short_channel_id))
+		    },
+		};
 		// TODO: Should we make a short ID for messages?
 		let msg = msg.encode();
 		let msg_size = msg.len() + sig_size;
 		let now = chrono::Utc::now().timestamp_micros();
 		let recv_peer = their_node_id.to_string();
 		let msg = base64::engine::general_purpose::URL_SAFE.encode(&msg);
+		let send_ts = send_ts.map(|ts| ts.to_string()).unwrap_or_default();
+		let node_id = node_id.map(|id| id.to_string()).unwrap_or_default();
+		let scid = scid.map(|scid| scid.to_string()).unwrap_or_default();
 
 		if let Writer::CustomWriter(exporter) = &self.writer {
 			// This is how we'll decode later.
 			// let smthn_d = lightning::ln::msgs::UnsignedChannelAnnouncement::read(&mut Cursor::new(smthn)).unwrap();
 
+			// Leave our optional fields at the end.
 			let record = LogRecord {
 				level: LogLevel::Gossip,
 				module_path: "custom::gossip_collector",
 				line: 0,
-				args: format_args!("{now},{recv_peer},{msg_type},{msg_size},{msg}"),
+				args: format_args!("{now},{recv_peer},{msg_type},{msg_size},{msg},{send_ts},{node_id},{scid}"),
 			};
 			exporter.log(record);
 		}
