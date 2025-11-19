@@ -29,17 +29,17 @@ panic = 'abort'     # Abort on panic
 default = []
 
 [dependencies]
-lightning = { version = "0.2.0", features = ["std"] }
-lightning-types = { version = "0.3.0" }
-lightning-invoice = { version = "0.34.0", features = ["std"] }
-lightning-net-tokio = { version = "0.2.0" }
-lightning-persister = { version = "0.2.0", features = ["tokio"] }
-lightning-background-processor = { version = "0.2.0" }
-lightning-rapid-gossip-sync = { version = "0.2.0" }
-lightning-block-sync = { version = "0.2.0", features = ["rest-client", "rpc-client", "tokio"] }
-lightning-transaction-sync = { version = "0.2.0", features = ["esplora-async-https", "time", "electrum-rustls-ring"] }
-lightning-liquidity = { version = "0.2.0", features = ["std"] }
-lightning-macros = { version = "0.2.0" }
+lightning = { version = "=0.2.0", features = ["std"] }
+lightning-types = { version = "=0.3.0" }
+lightning-invoice = { version = "=0.34.0", features = ["std"] }
+lightning-net-tokio = { version = "=0.2.0" }
+lightning-persister = { version = "=0.2.0", features = ["tokio"] }
+lightning-background-processor = { version = "=0.2.0" }
+lightning-rapid-gossip-sync = { version = "=0.2.0" }
+lightning-block-sync = { version = "=0.2.0", features = ["rest-client", "rpc-client", "tokio"] }
+lightning-transaction-sync = { version = "=0.2.0", features = ["esplora-async-https", "time", "electrum-rustls-ring"] }
+lightning-liquidity = { version = "=0.2.0", features = ["std"] }
+lightning-macros = { version = "=0.2.0" }
 
 bdk_chain = { version = "0.23.0", default-features = false, features = ["std"] }
 bdk_esplora = { version = "0.22.0", default-features = false, features = ["async-https-rustls", "tokio"]}
@@ -72,7 +72,7 @@ prost = { version = "0.11.6", default-features = false}
 winapi = { version = "0.3", features = ["winbase"] }
 
 [dev-dependencies]
-lightning = { version = "0.2.0", features = ["std", "_test_utils"] }
+lightning = { version = "=0.2.0", features = ["std", "_test_utils"] }
 proptest = "1.0.0"
 regex = "1.5.6"
 criterion = { version = "0.7.0", features = ["async_tokio"] }
@@ -131,17 +131,17 @@ harness = false
 #lightning-liquidity = { path = "../rust-lightning/lightning-liquidity" }
 #lightning-macros = { path = "../rust-lightning/lightning-macros" }
 
-lightning = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-types = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-invoice = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-net-tokio = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-persister = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-background-processor = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-rapid-gossip-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-block-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-transaction-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-liquidity = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
-lightning-macros = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-0.2.0-rc1"}
+lightning = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-types = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-invoice = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-net-tokio = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-persister = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-background-processor = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-rapid-gossip-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-block-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-transaction-sync = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-liquidity = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
+lightning-macros = { git = "https://github.com/jharveyb/rust-lightning", branch = "gossip_observer-v0.2"}
 
 #lightning = { git = "https://github.com/lightningdevkit/rust-lightning", rev = "21e9a9c0ef80021d0669f2a366f55d08ba8d9b03" }
 #lightning-types = { git = "https://github.com/lightningdevkit/rust-lightning", rev = "21e9a9c0ef80021d0669f2a366f55d08ba8d9b03" }
