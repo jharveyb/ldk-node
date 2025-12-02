@@ -14,13 +14,16 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
+use base64::engine::general_purpose::URL_SAFE_NO_PAD as b64_engine;
 use base64::Engine;
 use bitcoin::secp256k1::PublicKey;
-use bitcoin::hashes::Hash;
-use chrono::{TimeZone, Utc};
-use lightning::util::ser::Writeable;
+use chrono::Utc;
+use lightning::ln::peer_handler::IgnoringMessageHandler;
+use lightning::ln::wire::Message;
 pub use lightning::util::logger::Level as LogLevel;
+use lightning::util::logger::{ExportMessageDirection, MessageExporter, MessageType};
 pub(crate) use lightning::util::logger::{Logger as LdkLogger, Record as LdkRecord};
+use lightning::util::ser::Writeable;
 pub(crate) use lightning::{log_bytes, log_debug, log_error, log_info, log_trace};
 use log::{Level as LogFacadeLevel, Record as LogFacadeRecord};
 
@@ -225,71 +228,271 @@ impl LdkLogger for Logger {
 			},
 		}
 	}
+}
 
-	fn export(&self, their_node_id: PublicKey, msg: lightning::ln::msgs::UnsignedGossipMessage) {
-		if let Writer::LogFacadeWriter = self.writer { return }
+// Build a CSV row from our message and forward to the inner writer.
+fn export_record<T: core::fmt::Debug + MessageType>(
+	logger: Arc<dyn LogWriter + 'static>, sender_node_id: PublicKey, msg: &Message<T>,
+	direction: ExportMessageDirection,
+) {
+	let now = chrono::Utc::now().timestamp_micros();
+	let recv_peer = sender_node_id.to_string();
+	let mut send_ts = String::new();
+	let mut node_id = String::new();
+	let mut scid = String::new();
 
-		// Record the original message size, but only store the unsigned inner message.
-		let (msg_type, sig_size) = match msg {
-			lightning::ln::msgs::UnsignedGossipMessage::ChannelAnnouncement(_) => ("ca", 256),
-			lightning::ln::msgs::UnsignedGossipMessage::ChannelUpdate(_) => ("cu", 64),
-			lightning::ln::msgs::UnsignedGossipMessage::NodeAnnouncement(_) => ("na", 64),
-		};
-
-		// Extract interesting fields from the message.
-		// BOLT-7 suggests our timestamps are UNIX time in seconds; we'll switch
-		// units to microseconds to match our own timestamping precision.
-		let (send_ts, node_id, scid) = match msg {
-		    lightning::ln::msgs::UnsignedGossipMessage::NodeAnnouncement(na) => {
-			(Some((na.timestamp as u64) * 1000000), Some(na.node_id), None)
-		    }
-		    lightning::ln::msgs::UnsignedGossipMessage::ChannelAnnouncement(ca) => {
-			(None, None, Some(ca.short_channel_id))
-		    },
-		    lightning::ln::msgs::UnsignedGossipMessage::ChannelUpdate(cu) => {
-			(Some((cu.timestamp as u64) * 1000000), None, Some(cu.short_channel_id))
-		    },
-		};
-		// TODO: Should we make a short ID for messages?
-		let msg = msg.encode();
-		let msg_size = msg.len() + sig_size;
-		let now = chrono::Utc::now().timestamp_micros();
-		let recv_peer = their_node_id.to_string();
-		let msg = base64::engine::general_purpose::URL_SAFE.encode(&msg);
-		let send_ts = send_ts.map(|ts| ts.to_string()).unwrap_or_default();
-		let node_id = node_id.map(|id| id.to_string()).unwrap_or_default();
-		let scid = scid.map(|scid| scid.to_string()).unwrap_or_default();
-
-		if let Writer::CustomWriter(exporter) = &self.writer {
-			// This is how we'll decode later.
-			// let smthn_d = lightning::ln::msgs::UnsignedChannelAnnouncement::read(&mut Cursor::new(smthn)).unwrap();
-
-			// Leave our optional fields at the end.
-			let record = LogRecord {
-				level: LogLevel::Gossip,
-				module_path: "custom::gossip_collector",
-				line: 0,
-				args: format_args!("{now},{recv_peer},{msg_type},{msg_size},{msg},{send_ts},{node_id},{scid}"),
-			};
-			exporter.log(record);
+	// This func. should match on all types with arms in
+	// lightning::ln::peer_handler::is_inbound_msg_for_export.
+	// TODO: Unify these in some observer-common lib? So type field is less hacky
+	let msg_type = match msg {
+		Message::Ping(_) => "ping",
+		Message::Pong(_) => "pong",
+		Message::ChannelAnnouncement(ca) => {
+			scid = ca.contents.short_channel_id.to_string();
+			"ca"
+		},
+		Message::NodeAnnouncement(na) => {
+			// Scale timestamp from secs to usecs.
+			send_ts = ((na.contents.timestamp as u64) * 1000000).to_string();
+			node_id = na.contents.node_id.to_string();
+			"na"
+		},
+		Message::ChannelUpdate(cu) => {
+			// Scale timestamp from secs to usecs.
+			send_ts = ((cu.contents.timestamp as u64) * 1000000).to_string();
+			scid = cu.contents.short_channel_id.to_string();
+			"cu"
+		},
+		_ => {
+			println!("rust-lightning msg handler filter should not export this msg type");
+			println!("wtf: {}, {:?}", msg.type_id(), msg);
+			return;
 		}
+	};
+	// TODO: replace with to_string(), impl Display?
+	let msg_dir = match direction {
+		ExportMessageDirection::Inbound => "inbound",
+		ExportMessageDirection::Outbound => "outbound",
+		_ => todo!("rust-lightning should not export with this"),
+	};
 
-		// TODO: deprecate
-		if let Writer::FileWriter { ref file_path, .. } = self.writer {
-			if let Some(parent_dir) = Path::new(&file_path).parent() {
-				let export_line = format!("{now},{recv_peer},{msg_type},{msg_size},{msg}\n");
-				let export_path = parent_dir.join("gossip_export.csv");
+	let msg = msg.encode();
+	let msg_size = msg.len();
+	let msg_str = b64_engine.encode(&msg);
 
-				// CSV header:
-				// unix_micros,msg_hash,recv_peer,type,size
-				fs::OpenOptions::new()
-					.create(true)
-					.append(true)
-					.open(&export_path)
-					.expect("Failed to open log file")
-					.write_all(export_line.as_bytes())
-					.expect("Failed to write to log file")
-			}
+	// CSV string for our final Record. The logger will filter by module_path.
+	let args = format_args!(
+		"{now},{recv_peer},{msg_type},{msg_dir},{msg_size},{msg_str},{send_ts},{node_id},{scid}",
+	);
+	let record = LogRecord {
+		level: LogLevel::Gossip,
+		module_path: "custom::gossip_collector",
+		line: 0,
+		args,
+	};
+	logger.log(record)
+}
+
+impl MessageExporter for Logger {
+	// Ingest an LN wire message, annotate it with a timestamp + some parsed fields,
+	// and pass it as a custom Record to the parent CustomWriter.
+	fn export<T: core::fmt::Debug + MessageType>(
+		&self, their_node_id: PublicKey, msg: &Message<T>, direction: ExportMessageDirection,
+	) {
+		if let Writer::CustomWriter(logger) = &self.writer {
+			export_record(logger.clone(), their_node_id, msg, direction);
 		}
+	}
+
+	fn export_bin<T: core::fmt::Debug + MessageType>(
+		&self, their_node_id: PublicKey, msg: &T, direction: ExportMessageDirection,
+	) {
+		if let Writer::CustomWriter(logger) = &self.writer {
+			// Imitate lightning::ln::peer_channel_encryptor::PeerChannelEncryptor::encrypt_message().
+			// Write our (unencrypted) message with a type prefix; T.V. in the C.P.T.
+			// We assume most messages will be below 2KB.
+			let mut msg_buf = Vec::with_capacity(2 * 1024);
+			lightning::ln::wire::write(msg, &mut msg_buf).expect("Failed to encode message");
+
+			// Imitate lightning::ln::wire::read_message_encoded_with_write() test.
+			// Decode the buffer to a Message enum. Infallible is the custom message
+			// type parameter since we're only handling standard Lightning messages
+			// by using IgnoringMessageHandler here.
+			let decoded_msg =
+				lightning::ln::wire::read(&mut msg_buf.as_slice(), &IgnoringMessageHandler {})
+					.expect("Failed to decode message");
+
+			export_record(logger.clone(), their_node_id, &decoded_msg, direction);
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use bitcoin::hex::FromHex;
+	use bitcoin::secp256k1::{Message, Secp256k1};
+	use bitcoin::secp256k1::{PublicKey, SecretKey};
+	use std::convert::Infallible;
+use std::sync::Mutex;
+
+	use bitcoin::constants::ChainHash;
+	use ExportMessageDirection::{Inbound, Outbound};
+
+	use bitcoin::network::Network;
+	use lightning::ln::msgs;
+	use lightning::ln::wire;
+	use lightning::ln::types::ChannelId;
+
+	struct MockMessageExporter {
+		exported_logs: Mutex<Vec<String>>,
+	}
+
+	impl LogWriter for MockMessageExporter {
+		fn log(&self, record: LogRecord) {
+			self.exported_logs.lock().unwrap().push(record.args.to_string());
+		}
+	}
+
+	fn new_mock_exporter() -> (Arc<MockMessageExporter>, Logger) {
+		let mock_exporter = Arc::new(MockMessageExporter { exported_logs: Mutex::new(Vec::new()) });
+		let logger = Logger::new_custom_writer(mock_exporter.clone());
+
+		(mock_exporter, logger)
+	}
+
+	fn verify_logger_entry_count(exporter: Arc<MockMessageExporter>, msg_count: usize) {
+		let logs = exporter.exported_logs.lock().unwrap();
+		assert_eq!(logs.len(), msg_count);
+	}
+
+	fn verify_logger_exports(exporter: Arc<MockMessageExporter>, msg_type: &str, msg_count: usize) {
+		verify_logger_entry_count(exporter.clone(), msg_count);
+
+		let logs = exporter.exported_logs.lock().unwrap();
+		let log_entry = &logs[0];
+		assert!(log_entry.contains(msg_type), "Log should contain message type '{msg_type}'");
+		assert!(log_entry.contains("inbound"), "Log should contain direction 'inbound'");
+		let log_entry = &logs[1];
+		assert!(log_entry.contains(msg_type), "Log should contain message type '{msg_type}'");
+		assert!(log_entry.contains("outbound"), "Log should contain direction 'outbound'");
+	}
+
+	// Stolen from lightning::ln::msgs::tests unit tests.
+	macro_rules! get_keys_from {
+		($slice: expr, $secp_ctx: expr) => {{
+			let privkey = SecretKey::from_slice(&<Vec<u8>>::from_hex($slice).unwrap()[..]).unwrap();
+			let pubkey = PublicKey::from_secret_key(&$secp_ctx, &privkey);
+			(privkey, pubkey)
+		}};
+	}
+
+	macro_rules! get_sig_on {
+		($privkey: expr, $ctx: expr, $string: expr) => {{
+			let sighash = Message::from_digest_slice(&$string.into_bytes()[..]).unwrap();
+			$ctx.sign_ecdsa(&sighash, &$privkey)
+		}};
+	}
+
+	fn static_keypair() -> (SecretKey, PublicKey) {
+		let secp_ctx = Secp256k1::new();
+		get_keys_from!(
+			"0101010101010101010101010101010101010101010101010101010101010101",
+			secp_ctx
+		)
+	}
+
+	fn do_encoding_channel_update(direction: bool, disable: bool, excess_data: bool) -> msgs::ChannelUpdate {
+		let secp_ctx = Secp256k1::new();
+		let (privkey_1, _) = get_keys_from!(
+			"0101010101010101010101010101010101010101010101010101010101010101",
+			secp_ctx
+		);
+		let sig_1 =
+			get_sig_on!(privkey_1, secp_ctx, String::from("01010101010101010101010101010101"));
+		let unsigned_channel_update = msgs::UnsignedChannelUpdate {
+			chain_hash: ChainHash::using_genesis_block(Network::Bitcoin),
+			short_channel_id: 2316138423780173,
+			timestamp: 20190119,
+			message_flags: 1, // Only must_be_one
+			channel_flags: if direction { 1 } else { 0 } | if disable { 1 << 1 } else { 0 },
+			cltv_expiry_delta: 144,
+			htlc_minimum_msat: 1000000,
+			htlc_maximum_msat: 131355275467161,
+			fee_base_msat: 10000,
+			fee_proportional_millionths: 20,
+			excess_data: if excess_data { vec![0, 0, 0, 0, 59, 154, 202, 0] } else { Vec::new() },
+		};
+		let channel_update =
+			msgs::ChannelUpdate { signature: sig_1, contents: unsigned_channel_update };
+		let encoded_value = channel_update.encode();
+		let mut target_value = <Vec<u8>>::from_hex("d977cb9b53d93a6ff64bb5f1e158b4094b66e798fb12911168a3ccdf80a83096340a6a95da0ae8d9f776528eecdbb747eb6b545495a4319ed5378e35b21e073a").unwrap();
+		target_value.append(
+			&mut <Vec<u8>>::from_hex(
+				"6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000",
+			)
+			.unwrap(),
+		);
+		target_value.append(&mut <Vec<u8>>::from_hex("00083a840000034d013413a7").unwrap());
+		target_value.append(&mut <Vec<u8>>::from_hex("01").unwrap());
+		target_value.append(&mut <Vec<u8>>::from_hex("00").unwrap());
+		if direction {
+			let flag = target_value.last_mut().unwrap();
+			*flag = 1;
+		}
+		if disable {
+			let flag = target_value.last_mut().unwrap();
+			*flag |= 1 << 1;
+		}
+		target_value
+			.append(&mut <Vec<u8>>::from_hex("009000000000000f42400000271000000014").unwrap());
+		target_value.append(&mut <Vec<u8>>::from_hex("0000777788889999").unwrap());
+		if excess_data {
+			target_value.append(&mut <Vec<u8>>::from_hex("000000003b9aca00").unwrap());
+		}
+		assert_eq!(encoded_value, target_value);
+		channel_update
+	}
+
+	#[test]
+	fn export_ping() {
+		let (mock_exporter, logger) = new_mock_exporter();
+		let (_, pubkey) = static_keypair();
+
+		let ping_msg = msgs::Ping { ponglen: 64, byteslen: 64 };
+
+		logger.export_bin(pubkey, &ping_msg, Inbound);
+		logger.export(pubkey, &wire::Message::Ping::<Infallible>(ping_msg), Outbound);
+
+		let expected_msg_type = "ping";
+		verify_logger_exports(mock_exporter.clone(), expected_msg_type, 2);
+	}
+
+	#[test]
+	fn export_channel_update() {
+		let (mock_exporter, logger) = new_mock_exporter();
+		let (_, pubkey) = static_keypair();
+
+		let chan_update = do_encoding_channel_update(true, true, true);
+
+		logger.export_bin(pubkey, &chan_update, Inbound);
+		logger.export(pubkey, &wire::Message::ChannelUpdate::<Infallible>(chan_update), Outbound);
+
+		let expected_msg_type = "cu";
+		verify_logger_exports(mock_exporter.clone(), expected_msg_type, 2);
+	}
+
+	#[test]
+	fn export_stfu() {
+		let (mock_exporter, logger) = new_mock_exporter();
+		let (_, pubkey) = static_keypair();
+
+		let stfu = msgs::Stfu { channel_id: ChannelId::from_bytes([2; 32]), initiator: true };
+
+		logger.export_bin(pubkey, &stfu, Inbound);
+		logger.export(pubkey, &wire::Message::Stfu::<Infallible>(stfu), Outbound);
+
+		// Msgs of unsupported type are rejected.
+		verify_logger_entry_count(mock_exporter.clone(), 0);
 	}
 }
