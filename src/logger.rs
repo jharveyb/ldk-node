@@ -13,19 +13,24 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
+use std::hash::{Hash, Hasher};
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as b64_engine;
 use base64::Engine;
-use bitcoin::secp256k1::PublicKey;
+use bitcoin::{constants::ChainHash, secp256k1::PublicKey};
 use chrono::Utc;
-use lightning::ln::peer_handler::IgnoringMessageHandler;
+use lightning::ln::msgs::{SocketAddress, UnsignedNodeAnnouncement};
+use lightning::ln::{msgs::UnsignedChannelUpdate, peer_handler::IgnoringMessageHandler};
 use lightning::ln::wire::Message;
+use lightning::routing::gossip::{NodeAlias, NodeId};
 pub use lightning::util::logger::Level as LogLevel;
 use lightning::util::logger::{ExportMessageDirection, MessageExporter, MessageType};
 pub(crate) use lightning::util::logger::{Logger as LdkLogger, Record as LdkRecord};
 use lightning::util::ser::Writeable;
 pub(crate) use lightning::{log_bytes, log_debug, log_error, log_info, log_trace};
+use lightning_types::features::NodeFeatures;
 use log::{Level as LogFacadeLevel, Record as LogFacadeRecord};
+use twox_hash::xxhash3_64::Hasher as XX3Hasher;
 
 /// A unit of logging output with metadata to enable filtering `module_path`,
 /// `file`, and `line` to inform on log's source.
@@ -230,6 +235,99 @@ impl LdkLogger for Logger {
 	}
 }
 
+/// UnsignedNodeAnnouncement, without the timestamp. If we index over this, we can detect when nodes
+/// are rebroadcasting the same essential information.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct InnerNodeAnnouncement {
+	/// The advertised features
+	pub features: NodeFeatures,
+	/// The `node_id` this announcement originated from (don't rebroadcast the `node_announcement` back
+	/// to this node).
+	pub node_id: NodeId,
+	/// An RGB color for UI purposes
+	pub rgb: [u8; 3],
+	/// An alias, for UI purposes.
+	///
+	/// This should be sanitized before use. There is no guarantee of uniqueness.
+	pub alias: NodeAlias,
+	/// List of addresses on which this node is reachable
+	pub addresses: Vec<SocketAddress>,
+	/// Excess address data which was signed as a part of the message which we do not (yet) understand how
+	/// to decode.
+	///
+	/// This is stored to ensure forward-compatibility as new address types are added to the lightning gossip protocol.
+	pub excess_address_data: Vec<u8>,
+}
+
+impl From<&UnsignedNodeAnnouncement> for InnerNodeAnnouncement {
+	fn from(msg: &UnsignedNodeAnnouncement) -> Self {
+		InnerNodeAnnouncement {
+			features: msg.features.clone(),
+			node_id: msg.node_id,
+			rgb: msg.rgb,
+			alias: msg.alias,
+			addresses: msg.addresses.clone(),
+			excess_address_data: msg.excess_address_data.clone(),
+		}
+	}
+}
+
+/// UnsignedChannelUpdate, without the timestamp. If we index over this, we can detect when nodes
+/// are rebroadcasting the same essential information.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct InnerChannelUpdate {
+	/// The genesis hash of the blockchain where the channel is to be opened
+	pub chain_hash: ChainHash,
+	/// The short channel ID
+	pub short_channel_id: u64,
+	/// Flags pertaining to this message.
+	pub message_flags: u8,
+	/// Flags pertaining to the channel, including to which direction in the channel this update
+	/// applies and whether the direction is currently able to forward HTLCs.
+	pub channel_flags: u8,
+	/// The number of blocks such that if:
+	/// `incoming_htlc.cltv_expiry < outgoing_htlc.cltv_expiry + cltv_expiry_delta`
+	/// then we need to fail the HTLC backwards. When forwarding an HTLC, `cltv_expiry_delta` determines
+	/// the outgoing HTLC's minimum `cltv_expiry` value -- so, if an incoming HTLC comes in with a
+	/// `cltv_expiry` of 100000, and the node we're forwarding to has a `cltv_expiry_delta` value of 10,
+	/// then we'll check that the outgoing HTLC's `cltv_expiry` value is at least 100010 before
+	/// forwarding. Note that the HTLC sender is the one who originally sets this value when
+	/// constructing the route.
+	pub cltv_expiry_delta: u16,
+	/// The minimum HTLC size incoming to sender, in milli-satoshi
+	pub htlc_minimum_msat: u64,
+	/// The maximum HTLC value incoming to sender, in milli-satoshi.
+	///
+	/// This used to be optional.
+	pub htlc_maximum_msat: u64,
+	/// The base HTLC fee charged by sender, in milli-satoshi
+	pub fee_base_msat: u32,
+	/// The amount to fee multiplier, in micro-satoshi
+	pub fee_proportional_millionths: u32,
+	/// Excess data which was signed as a part of the message which we do not (yet) understand how
+	/// to decode.
+	///
+	/// This is stored to ensure forward-compatibility as new fields are added to the lightning gossip protocol.
+	pub excess_data: Vec<u8>,
+}
+
+impl From<&UnsignedChannelUpdate> for InnerChannelUpdate {
+	fn from(msg: &UnsignedChannelUpdate) -> Self {
+		Self {
+			chain_hash: msg.chain_hash,
+			short_channel_id: msg.short_channel_id,
+			message_flags: msg.message_flags,
+			channel_flags: msg.channel_flags,
+			cltv_expiry_delta: msg.cltv_expiry_delta,
+			htlc_minimum_msat: msg.htlc_minimum_msat,
+			htlc_maximum_msat: msg.htlc_maximum_msat,
+			fee_base_msat: msg.fee_base_msat,
+			fee_proportional_millionths: msg.fee_proportional_millionths,
+			excess_data: msg.excess_data.clone(),
+		}
+	}
+}
+
 // Build a CSV row from our message and forward to the inner writer.
 fn export_record<T: core::fmt::Debug + MessageType>(
 	logger: Arc<dyn LogWriter + 'static>, sender_node_id: PublicKey, msg: &Message<T>,
@@ -244,23 +342,34 @@ fn export_record<T: core::fmt::Debug + MessageType>(
 	// This func. should match on all types with arms in
 	// lightning::ln::peer_handler::is_inbound_msg_for_export.
 	// TODO: Unify these in some observer-common lib? So type field is less hacky
+	let mut msg_hasher = XX3Hasher::new();
 	let msg_type = match msg {
-		Message::Ping(_) => "ping",
-		Message::Pong(_) => "pong",
+		Message::Ping(pi) => {
+			pi.hash(&mut msg_hasher);
+			"ping"
+		},
+		Message::Pong(po) => {
+			po.hash(&mut msg_hasher);
+			"pong"
+		},
+		// TODO: hash all msgs
 		Message::ChannelAnnouncement(ca) => {
 			scid = ca.contents.short_channel_id.to_string();
+			ca.contents.hash(&mut msg_hasher);
 			"ca"
 		},
 		Message::NodeAnnouncement(na) => {
 			// Scale timestamp from secs to usecs.
 			send_ts = ((na.contents.timestamp as u64) * 1000000).to_string();
 			node_id = na.contents.node_id.to_string();
+			InnerNodeAnnouncement::from(&na.contents).hash(&mut msg_hasher);
 			"na"
 		},
 		Message::ChannelUpdate(cu) => {
 			// Scale timestamp from secs to usecs.
 			send_ts = ((cu.contents.timestamp as u64) * 1000000).to_string();
 			scid = cu.contents.short_channel_id.to_string();
+			InnerChannelUpdate::from(&cu.contents).hash(&mut msg_hasher);
 			"cu"
 		},
 		_ => {
@@ -269,6 +378,7 @@ fn export_record<T: core::fmt::Debug + MessageType>(
 			return;
 		}
 	};
+	let inner_hash = msg_hasher.finish();
 	// TODO: replace with to_string(), impl Display?
 	let msg_dir = match direction {
 		ExportMessageDirection::Inbound => "inbound",
@@ -282,7 +392,7 @@ fn export_record<T: core::fmt::Debug + MessageType>(
 
 	// CSV string for our final Record. The logger will filter by module_path.
 	let args = format_args!(
-		"{now},{recv_peer},{msg_type},{msg_dir},{msg_size},{msg_str},{send_ts},{node_id},{scid}",
+		"{now},{recv_peer},{msg_type},{msg_dir},{msg_size},{inner_hash},{msg_str},{send_ts},{node_id},{scid}",
 	);
 	let record = LogRecord {
 		level: LogLevel::Gossip,
@@ -344,6 +454,8 @@ use std::sync::Mutex;
 	use lightning::ln::wire;
 	use lightning::ln::types::ChannelId;
 
+	const MSG_PARTS: usize = 10;
+
 	struct MockMessageExporter {
 		exported_logs: Mutex<Vec<String>>,
 	}
@@ -376,6 +488,8 @@ use std::sync::Mutex;
 		let log_entry = &logs[1];
 		assert!(log_entry.contains(msg_type), "Log should contain message type '{msg_type}'");
 		assert!(log_entry.contains("outbound"), "Log should contain direction 'outbound'");
+		let msg_parts = log_entry.split(',').count();
+		assert!(msg_parts == MSG_PARTS, "Log should contain {MSG_PARTS} parts");
 	}
 
 	// Stolen from lightning::ln::msgs::tests unit tests.

@@ -67,6 +67,7 @@ log = { version = "0.4.22", default-features = false, features = ["std"]}
 
 vss-client = { package = "vss-client-ng", version = "0.4" }
 prost = { version = "0.11.6", default-features = false}
+twox-hash = { version = "2.1.2", features = ["std", "xxhash3_64"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winbase"] }
@@ -90,9 +91,6 @@ clightningrpc = { version = "0.3.0-beta.8", default-features = false }
 [target.'cfg(lnd_test)'.dev-dependencies]
 lnd_grpc_rust = { version = "2.10.0", default-features = false }
 tokio = { version = "1.37", features = ["fs"] }
-
-[target.'cfg(vss_test)'.dev-dependencies]
-ldk-node-062 = { package = "ldk-node", version = "=0.6.2" }
 
 [build-dependencies]
 uniffi = { version = "0.28.3", features = ["build"], optional = true }
