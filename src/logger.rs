@@ -10,18 +10,18 @@
 #[cfg(not(feature = "uniffi"))]
 use core::fmt;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
-use std::hash::{Hash, Hasher};
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as b64_engine;
 use base64::Engine;
 use bitcoin::{constants::ChainHash, secp256k1::PublicKey};
 use chrono::Utc;
 use lightning::ln::msgs::{SocketAddress, UnsignedNodeAnnouncement};
-use lightning::ln::{msgs::UnsignedChannelUpdate, peer_handler::IgnoringMessageHandler};
 use lightning::ln::wire::Message;
+use lightning::ln::{msgs::UnsignedChannelUpdate, peer_handler::IgnoringMessageHandler};
 use lightning::routing::gossip::{NodeAlias, NodeId};
 pub use lightning::util::logger::Level as LogLevel;
 use lightning::util::logger::{ExportMessageDirection, MessageExporter, MessageType};
@@ -376,7 +376,7 @@ fn export_record<T: core::fmt::Debug + MessageType>(
 			println!("rust-lightning msg handler filter should not export this msg type");
 			println!("wtf: {}, {:?}", msg.type_id(), msg);
 			return;
-		}
+		},
 	};
 	let inner_hash = msg_hasher.finish();
 	// TODO: replace with to_string(), impl Display?
@@ -444,15 +444,15 @@ mod tests {
 	use bitcoin::secp256k1::{Message, Secp256k1};
 	use bitcoin::secp256k1::{PublicKey, SecretKey};
 	use std::convert::Infallible;
-use std::sync::Mutex;
+	use std::sync::Mutex;
 
 	use bitcoin::constants::ChainHash;
 	use ExportMessageDirection::{Inbound, Outbound};
 
 	use bitcoin::network::Network;
 	use lightning::ln::msgs;
-	use lightning::ln::wire;
 	use lightning::ln::types::ChannelId;
+	use lightning::ln::wire;
 
 	const MSG_PARTS: usize = 10;
 
@@ -510,13 +510,12 @@ use std::sync::Mutex;
 
 	fn static_keypair() -> (SecretKey, PublicKey) {
 		let secp_ctx = Secp256k1::new();
-		get_keys_from!(
-			"0101010101010101010101010101010101010101010101010101010101010101",
-			secp_ctx
-		)
+		get_keys_from!("0101010101010101010101010101010101010101010101010101010101010101", secp_ctx)
 	}
 
-	fn do_encoding_channel_update(direction: bool, disable: bool, excess_data: bool) -> msgs::ChannelUpdate {
+	fn do_encoding_channel_update(
+		direction: bool, disable: bool, excess_data: bool,
+	) -> msgs::ChannelUpdate {
 		let secp_ctx = Secp256k1::new();
 		let (privkey_1, _) = get_keys_from!(
 			"0101010101010101010101010101010101010101010101010101010101010101",
