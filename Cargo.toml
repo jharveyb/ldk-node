@@ -16,6 +16,10 @@ categories = ["cryptography::cryptocurrencies"]
 crate-type = ["lib", "staticlib", "cdylib"]
 name = "ldk_node"
 
+[[bin]]
+name = "recover-p2wsh"
+path = "src/bin/recover_p2wsh.rs"
+
 [profile.release-smaller]
 inherits = "release"
 opt-level = 'z'     # Optimize for size.
@@ -59,7 +63,7 @@ bdk_wallet = { version = "2.3.0", default-features = false, features = ["std", "
 bitreq = { version = "0.3", default-features = false, features = ["async-https", "json-using-serde"] }
 rustls = { version = "0.23", default-features = false }
 rusqlite = { version = "0.31.0", features = ["bundled"] }
-bitcoin = "0.32.7"
+bitcoin = { version = "0.32.7", features = ["bitcoinconsensus-std" ] }
 bip39 = { version = "2.0.0", features = ["rand"] }
 bip21 = { version = "0.5", features = ["std"], default-features = false }
 
